@@ -167,7 +167,7 @@ P: Processer, 抽象处理器. P负责调度协程, 与CPU核对应. P与M绑定
 
 P一般与系统核数相同, M一般多于P(因为M会出现休眠/阻塞等情况).
 
-link:./assets/gmp.jpg[gmp结构]
+image:./assets/gmp.jpg[gmp结构]
 
 GMP 并发高效的原因
 1. GMP调度方式, 设计
@@ -178,7 +178,7 @@ P队列:
 2. 全局队列. 有锁, 用于不同的P之间负载均衡任务.
 3. 本地队列和全局队列会自动进行任务均衡.
 
-link:./assets/gmp-process.jpg[调度过程]
+image:./assets/gmp-process.jpg[调度过程]
 
 1. 函数执行时创建G, 将其绑定到P上, 如果P本地队列满则放到全局队列
 2. 唤醒或从全局队列获取或创建M, 与P绑定, 开始执行G.
