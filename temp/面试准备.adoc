@@ -1,6 +1,9 @@
 = 面试准备
+:toc:
+:sectnums:
 
-== 网络
+== 技术问题
+=== 网络
 .OSI七层模型
 1. 应用层. 应用级. 如 http/ftp/pop3(邮件), 针对不同软件的不同协议.
 2. 表示层. 数据格式转换. 如 ssl/tls.
@@ -10,7 +13,7 @@
 6. 链路层. 物理层面上互联节点之间数据的传送. 如 PPP.
 7. 物理层. 将数据的 0/1 转换为 高低电平或脉冲信号.
 
-=== HTTP2
+==== HTTP2
 https://developers.google.com/web/fundamentals/performance/http2?hl=zh-cn
 
 .架构
@@ -27,7 +30,7 @@ https://developers.google.com/web/fundamentals/performance/http2?hl=zh-cn
 消息是最小的逻辑交互单位, 即 Request/Response 都是基于消息交互, 消息由 header/data Frames 组成.
 但是一次物理通信最小的单位是帧, C/S 发送数据最小的单位是帧. 如一个消息有多个 data Frame, C/S 每次通信发一个 Frame, C/S 端会整理 data Frame.
 
-==== http/sse
+===== http/sse
 sse 是指 websocket 等技术
 
 http 是基于浏览器层面考虑的, sse 是基于应用程序层面考虑的.
@@ -36,7 +39,7 @@ js 可以控制sse, 但不能控制http.
 
 sse 底层是基于 http 的.
 
-=== rpc
+==== rpc
 rpc即远程服务调用, 是一个概念/技术规范. grpc是一种实现, http+restful也可以视为一种实现.
 
 .rpc主要由如下模块组成
@@ -56,7 +59,7 @@ rpc即远程服务调用, 是一个概念/技术规范. grpc是一种实现, htt
 2. http也可以单纯作为rpc通讯协议的选择之一, 其他可选的协议还有 socket, tcp/udp等.
 . tcp是传输层协议(第四层), http/rpc 都是应用层协议(五层模型). 在七层模型中, rpc是会话层, http是应用层.
 
-==== grpc
+===== grpc
 grpc底层使用 http2 作为通信传输协议, 但相较于直接使用http, grpc的protobuf格式与序列化/反序列化技术更为高效, 以及作为rpc功能更丰富.
 
 grpc 本身不支持负载均衡/服务发现, 但是预留了相关接口. 可以通过 etcd/envoy 等技术实现类似功能
@@ -65,11 +68,11 @@ grpc 本身不支持负载均衡/服务发现, 但是预留了相关接口. 可�
 1. 优点: 序列化/反序列化快(具体源码未研究), 向后兼容, 二进制框架, 带压缩功能, 支持http2.
 2. 缺点: 不是http. 表象来看就是, 可视化, 浏览器友好, 阅读友好等.
 
-== 负载均衡
+=== 负载均衡
 1. Load Banlance Proxy 模式. 代理模式, 由指定节点实现负载均衡. 该类节点可能是由特定设计的机器承担的.
 2. Client Load Banlance. 客户端负责负载均衡策略.
 
-== slice
+=== slice
 切片数据结构
 {
   byte*     array;      // actual data,                   指针 指向数组的某个位置
@@ -84,7 +87,7 @@ slice步长 -> 新slice 是在原数组/slice(地址) 上取一段地址, 不会
 2. 数组初始化时确定长度, 后续不可更改.
 3. array 的长度是Type的一部分, 即 [10]int 与 [20]int 是不同的.
 
-== map
+=== map
 1. hash方法. 追求目的: 减少碰撞, 完美分配key.
 2. 存储结构: 将hash值分散到连续地址上.
   .. hash冲突常用解决方法: 冲突元素置于一个数组中, map查找时先找到地址, 然后遍历List.
@@ -98,7 +101,7 @@ slice步长 -> 新slice 是在原数组/slice(地址) 上取一段地址, 不会
 1. 当map扩容时, map的key会重新进行hash, 如此遍历时顺序肯定发生变化.
 2. go1.0 之后, map key 遍历时, 会添加一个随机数, 从随机位置开始遍历, 所以每次遍历起始位置不同, 顺序也自然不同. 不过相对顺序还是一致的, 如 `0-1-2 -> 1-2-0` (遍历内存地址顺序)
 
-== chanel
+=== chanel
 https://juejin.im/post/6844903821349502990
 
 chanel 数据结构
@@ -145,7 +148,7 @@ chanel 数据结构
 2. Actor 参与者. 一切 每个 Actor 有唯一地址, 进行数据通信, 实现并发控制.
 . 参考: https://cloud.tencent.com/developer/article/1349213
 
-== gin/net/http
+=== gin/net/http
 1. 性能提升: 框架相较于原生 net/http 包, 路由管理性能提升很大.
 2. 功能提升: 中间件, 返回数据reader, context参数, bind方法等.
 
@@ -156,7 +159,7 @@ chanel 数据结构
 1. 思想: 使用树的方式, 采取前缀匹配(包含 完全匹配/模糊匹配/正则匹配(可选) 几种模式)
 2. iris 使用 muxie 库实现, 具体没有研究.
 
-== GMP
+=== GMP
 https://www.cnblogs.com/sunsky303/p/9705727.html
 
 https://juejin.im/post/6844904034449489933
@@ -192,11 +195,11 @@ image:./assets/gmp-process.jpg[调度过程]
 1. runtime.main 会创建一个额外线程运行 sysmon 函数.
 2. sysmon函数会无限循环(休眠时间由 20us->10ms)
 
-=== goroutine
+==== goroutine
 1. 一个 goroutine 大小约为 2kb, 其他语言的thread约为1M左右.
 2. goroutine 更简单, 更易于管理.
 
-== kafka
+=== kafka
 kafka结构: Producer brokers, Brokers, Consumer Group brokers, zookeeper集群.
 
 kafka 通过 zookeeper 实现集群管理.
@@ -219,7 +222,7 @@ kafka保证单Partition内消费是有序的, 多Partition消费不一定是有�
 pravega 大数据流式存储
 pulsar 大数据 流批统一 消息队列, bookeeper 存储海量数据且高效(分层)
 
-== epoll
+=== epoll
 https://www.cnblogs.com/aspirant/p/9166944.html
 
 epoll是Linux内核的可扩展I/O事件通知机制, 让需要大量操作文件描述符的程序得以发挥更优异的性能.
@@ -240,14 +243,14 @@ epoll 只监听其中发生事件的 I/O通知, 复杂度为 O(K) 或 O(1)
 2. epoll 为每个fd指定一个回调函数, 实现具体的会掉通知. select/poll 通过监听文件描述符实现.
 3. select 由于单个进程能够监听的文件描述符有最大限制(系统可调), 且select使用轮询, 所以监听句柄有上限. 而epoll则无此限制.
 
-== 分布式事务方案
+=== 分布式事务方案
 尽量避免分布式事务.
 
 1. Mysql XA 事务
 2. RocketMQ 事务消息
 3. 事件补偿+超时回滚机制. 如 order/payment 分布式事务处理, 使用 消息补偿+超时关单 方式保证事务, 通过订单状态确定事务状态.
 
-== GC
+=== GC
 .GC思想
 1. 追踪式垃圾回收. 判断对象是否可达, 一旦发现不可达则标记为删除.
 2. 引用计数法. 当引用计数为0时标记为回收. 可能出现循环引用, 每次赋值需要增加计数.
@@ -276,7 +279,7 @@ https://segmentfault.com/a/1190000022030353
 2. 定量. 分配的内存到达一定值
 3. 定时.
 
-== context
+=== context
 关闭方法: ctx.Done(), ctx.WithCanel() 返回canel方法
 
 WithValue, WithDeadLine(时间点关闭), WithTimeOut() 时间间隔后关闭.
@@ -287,14 +290,14 @@ WithValue() -> calueCtx, 结构
   key,value interface{}   // WithValue/Value() 写/取值时, 会判断key是否comparable(即是否可以被当作key)
 }
 
-== HLL
+=== HLL
 HyperLogLog redis 基数计数算法.
 
 标准误差 0.81, 通常使用多次HLL算法减小误差. 数据越随机, 试验次数越多(即数据量越大), 准确性越高.
 
 具体原理参考 自己写的博客.
 
-== gorm
+=== gorm
 . DB, gorm对数据库的抽象. 负责与用户交互, 以及与数据库交互.
 . Scope, 构建查询条件(Conditions), 执行SQL, 调起回调函数.
 . CallBack, 负责CURD具体的执行逻辑. 具体的Conditions处理, db交互
@@ -302,7 +305,7 @@ HyperLogLog redis 基数计数算法.
 
 gorm(Go Object Relational Mapping, Go 对象关系映射).
 
-== mysql
+=== mysql
 ACID 原子性, 一致性, 隔离性, 持久性
 
 隔离性问题: 脏读, 不可重复读, 幻读. 对应解决方法如下.
@@ -317,7 +320,7 @@ ACID 原子性, 一致性, 隔离性, 持久性
 . InnoDB Mysql默认引擎, 支持事务, 优先考虑. 适合查询/插入/更新都很多的情况.
 . MyISAM 不支持事务, 无主键, 适合查询很多的情况.
 
-== 内存对齐
+=== 内存对齐
 字段的不同排列方式可能造成所占大小不同.
 起因是底层架构中, 内存对齐的原因. 内存对齐是为了加快访问, 一般采用2的指数次方对齐.
 起因是 内存访问远远低于CPU周期, 造价也低于计算资源.
@@ -347,7 +350,7 @@ ACID 原子性, 一致性, 隔离性, 持久性
   - 如果 `startAddr/16<=1`, 既数据在同一offset内, 则一次读取也可以读出全部值
   - 如果 `startAddr/16>1`, 假设起始地址是0x18H(十进制24), 所以第一个字节存储在 offset为0的 A3, 最后一个字节存储在A0, 但是偏移量不同. 又因为offset只能是4的倍数, 所以第一次读取offset=0的 (A0-A3), 第二次读取 offset=1的 (A0-A3)', 然后拼接两段值得到2byte数据.
 
-== 缓存
+=== 缓存
 缓存穿透. 恶意访问或非法id造成, 无数次击穿缓存访问数据库.
 
 缓存雪崩. 缓存集体失效.
@@ -358,9 +361,9 @@ ACID 原子性, 一致性, 隔离性, 持久性
 LRU: 最远最少使用.
 redis LRU 不是完全LRU的, 而是随机选择一定大小的块, 按LRU规则筛选. 可配置.
 
-== Go内存原理
+=== Go内存原理
 
-== 内存管理
+=== 内存管理
 .流程
 1. 从系统申请一大块地址, 目的是减少系统调用的次数.
 2. 将申请到的内存按特定大小切分为小块, 构成链表. 一般按照8的倍数切分. 为对象分配内存时, 只需从链表中取出一段即可.
