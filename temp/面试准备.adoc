@@ -283,6 +283,17 @@ ACID 原子性, 一致性, 隔离性, 持久性
 6. 链路层. 物理层面上互联节点之间数据的传送. 如 PPP.
 7. 物理层. 将数据的 0/1 转换为 高低电平或脉冲信号.
 
+.三次握手
+1. syn_sen状态. 建立链接, client 发送Syn(seq=i)包 到server.
+2. syn_recv状态. 服务器回应, 服务器回应 Ack(seq=i+1) 到client, 并且发送Syn(seq=j)包给client
+3. established状态. 客户端回应, clent 发送Ack(seq=j+1) 到服务器, 链接建立完成.
+
+.四次挥手. 链接关闭也可以是服务端发起关闭.
+1. 客户端发送 FIN报文 给服务端
+2. 服务端收到报文, 回复ACK给客户端, 同时服务端告诉进程关闭链接
+3. 服务端内部处理完毕后, 发送 FIN 给客户端.
+4. 客户端发送 ACK 给服务端.
+
 ==== HTTP2
 https://developers.google.com/web/fundamentals/performance/http2?hl=zh-cn
 
