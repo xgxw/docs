@@ -562,6 +562,8 @@ spans_mapped         bitmap_mapped     arena_start   arena_used      arena_end
   .. 重试和消息补偿. 当消息消费失败, 会将其加载到延迟队列, 重新消费, 有些服务则是另起协程, 一般是每 1/5/10s 重试, 全部失败则通知关单.
   .. 超时关单. 业务方负责超时检测. 将消息放入延迟队列(chanel或消息队列), 当订单超时时触发关单操作.
 2. 对账检查. 保底措施, 通过对账检测数据的正确性.
+  .. 对账常用指标: 应收, 实收, 退款, 手续费/丰润, 交易笔数等
+  .. 业务指标: 门店层次:用户留存率, 回头率. 公司运营层次: 商户交易数, 作弊统计(根据交易频次/每单交易额/是否异地, 从而决定限制交易或限额)
 
 一致性其他实现参考: https://cloud.tencent.com/developer/article/1041507
 
@@ -585,69 +587,4 @@ spans_mapped         bitmap_mapped     arena_start   arena_used      arena_end
 3. 检查总金额是否一致.
 
 == 算法
-=== ip地址查找
-某一地址段指向同一个域名信息
-
-数组二分法+map查找
-
-=== 二维矩阵顺时针排序
-.主要是两个判断
-1. 结束条件判断.
-2. 遍历时路径判断.
-
-func(){
-  mini,minj,maxi,maxj:= 0,0,len(a[0]),len(a)
-  ok1 := mini!=maxi
-  ok2 := minj!=maxj
-  for ok1 || ok2{
-    cacl(...)
-    if mini<maxi{
-      mini++
-      maxi--
-    }
-    if minj<maxj{
-      minj++
-      maxj--
-    }
-  }
-}
-func cacl(maxi,maxj,mini,minj){
-  i,j:=mini,minj
-  for i++;i<maxi+1{
-  }
-  for j++;j<maxj+1{
-  }
-  for i--;i>mini{
-  }
-  for j--;j>minj{
-  }
-}
-
-借助 i+(x) 的实现. x 每次变向实现 正向/逆向 循环, 如此只需两个游标即可, 无需四个. 具体不再考虑.
-
-func(){
-  mini,minj,maxi,maxj:= 0,0,len(a[0]),len(a)
-  ok1 := mini!=maxi
-  ok2 := minj!=maxj
-  for ok1 || ok2{
-    cacl2(...,1)
-    cacl2(...,-1)
-    if mini<maxi{
-      mini++
-      maxi--
-    }
-    if minj<maxj{
-      minj++
-      maxj--
-    }
-  }
-}
-func cacl2(maxi,maxj,minj,minj,x){
-  i,j:=mini,minj
-  for i+x;i<maxi+1&&j>0{
-  }
-  for j+x;j<maxj+1&&j>0{
-  }
-}
-
-em.. 看起来还是以一圈的方式更加高效
+算法参考 leetcode/编程之美 等资料
