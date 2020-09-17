@@ -394,7 +394,20 @@ slice步长 -> 新slice 是在原数组/slice(地址) 上取一段地址, 不会
 2. iris 使用 muxie 库实现, 具体没有研究.
 
 === kafka
-kafka结构: Producer brokers, Brokers, Consumer Group brokers, zookeeper集群.
+.kafka broker 结构: https://zhuanlan.zhihu.com/p/71093510
+1. Broker. 消息中间件处理结点, 一个 Kafka 节点就是一个 broker, 多个 broker 可以组成一个 Kafka 集群.
+2. Topic. 一类消息.
+3. Partition. topic 物理上的分组.
+4. segment. 每个Partition由多个segment file组成.
+5. offset. Partition中消息的序号.
+6. 消息. kafka最小单位.
+
+.segment file
+1. 由两部分组成: index file和data file, 后缀分别为 .index/.log index记录消息的offset+物理偏移地址, data记录具体的信息.
+2. segment file是按照offset分段的, 如 0-1000 在第一个文件中, 命名为 0..0.index/log, 1000-2000在第二个文件中, 命名为 0..2000.index/log. 文件值最大为long值的大小, 即64位二进制, 19位字符串大小, 前缀0填充.
+3. 分段是为了方便查找offset.
+
+按照功能, 消息队列分为: 生产者, 消费者, 消息中间件节点, zookeeper集群(保证一致性)
 
 kafka 通过 zookeeper 实现集群管理.
 
