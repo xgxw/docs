@@ -400,6 +400,24 @@ kafka 通过 zookeeper 实现集群管理.
 
 分区以文件夹形式存储数据, 分区有索引加快检索.
 
+==== offset
+https://www.jianshu.com/p/449074d97daf
+
+.kafka中有两种offset
+1. Current Offset,本地offset. 消费者端保存的offset.
+2. Committed Offset, 服务端offset. Broker端保存的offset, 表示Consumer已经确认消费过的消息的序号.
+
+如果使用 Current Offset, 当消费者 reblance或挂掉重启后, offset位置将丢失.
+如果使用 Committed Offset, reblance或消费者重启不影响offset记录, 因为是记录在服务端的.
+
+.消费者组
+1. 在消费者组中, Group Coordinator 负责 Consumer Group的管理, 各Consumer的offset管理, Consumer元数据(id等) 等.
+2. 在消费者组中, 一个partition只能固定的交给一个消费者组中的一个消费者消费, 因此kafka以 `groupid-topic-partition -> offset` 的方式保存offset.
+3. kafka将offset存在topic `__consumers_offsets` 中, 读取时通过 Offsets cache 查询 offset. 更新offset时首先发消息到topic中, 然后更新cache. 
+
+auto.offset.reset 配置, 表示如果Kafka中没有存储对应的offset信息的话, 消费者从何处开始消费消息(可指定 earliest(最早)/latest(最新)/none(直接抛异常))
+
+==== 顺序消费
 kafka保证单Partition内消费是有序的, 多Partition消费不一定是有序的(如果要保证多partition有序, 则p1阻塞后, p2也会阻塞(要有序), 会影响kafka的吞吐性).
 
 .kafka 消息分区策略
