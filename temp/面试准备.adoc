@@ -273,6 +273,132 @@ ACID 原子性, 一致性, 隔离性, 持久性
 
 . 不可重复读指一次事务内多次读取值不同. 可重复读指事务开始时加锁, 如此在事务过程中, 多次读的值就是相同的.
 
+=== redis
+redis 是内存数据库, 所以redis主要有两个方向的应用. 数据库, 大量数据的存储和查询. 基于内存, 所以设计/使用上与基于硬盘的不同, 更加注重速度, 结构也更注重简单高效.
+
+单线程+IO多路复用模型(选用系统实现, 如epoll/select).
+单线程是因为 redis 的瓶颈不在cpu, 而是内存查找.
+
+==== sds
+redis 中的key和字符串value使用的都是sds结构.
+
+sds可以减少变量需要重新分配空间的次数(通过使用内部的free从而减少重新分配次数)
+
+.类似go中的切片, 有三个字段组成: 
+1. buf: 字节数组
+2. free: 数组中未使用的数量
+3. len: 数组中已使用的数量
+4. sds 以C风格的 '\0' 作为字符串末尾
+
+==== 跳跃表
+跳跃表类似树, 通过将数据集中部分节点作为索引节点提到上一层实现索引. redis通过
+
+在 zset(有序集) 结构中, 底层使用跳跃表实现.
+
+与平衡树相比, 跳跃表实现更为简单, 也不需要rebalance.
+
+==== 压缩列表
+redis中 哈希表/列表/有序集合 底层皆使用了压缩列表.
+
+.压缩列表好处
+1. 在一定的时间复杂度下, 节省内存. 使用hash实现比压缩列表更占用内存(map底层会有些key是空的).
+2. 减少内存碎片. 因为压缩列表物理上时一连串的内存地址.
+
+压缩列表是由一系列特殊编码的内存块构成的列表, 结构如下
+`| zlbytes | zltail | zllen | entry1 | entry2 |  ...   | entryN | zlend |`
+
+1. zlbytes: 整个 ziplist 占用的内存字节数. 重分配时使用.
+2. zltail: 到达 ziplist 表尾节点的偏移量.
+3. zllen: ziplist 中节点的数量.
+4. zlend: 末尾标识符.
+5. entry结构: `| pre_entry_length | encoding | length | content |`
+  .. pre_entry_length: 记录了前一个节点的长度. 可以通过这个值跳转到上一个节点
+  .. encoding: content 编码方式. 分为整数/字符数组
+  .. length: 本节点长度.
+
+=== 延迟队列实现
+1. redis zset. 通过设置score实现.
+2. rabbitmq ttl(存活时间)+dxl(死信队列)实现.
+3. 类似netty的时间轮调度算法. 设置一组时间key, 然后将队列挂在key的队列上, 然后定时调起列表上的任务. key也可以是环形的时间轮, 将触发事件hash后挂载到轮上.
+
+=== kafka
+kafka是一个着重于吞吐量设计的流式消息队列.
+与rabbitmq等消息队列相比, kafka吞吐量更高, 但是消息可靠性, 功能不如rabbitmq.
+
+.kafka broker 结构: https://zhuanlan.zhihu.com/p/71093510
+1. Broker. 消息中间件处理结点, 一个 Kafka 节点就是一个 broker, 多个 broker 可以组成一个 Kafka 集群.
+2. Topic. 一类消息.
+3. Partition. topic 物理上的分组.
+4. segment. 每个Partition由多个segment file组成.
+5. offset. Partition中消息的序号.
+6. 消息. kafka最小单位.
+
+.segment file
+1. 由两部分组成: index file和data file, 后缀分别为 .index/.log index记录消息的offset+物理偏移地址, data记录具体的信息.
+2. segment file是按照offset分段的, 如 0-1000 在第一个文件中, 命名为 0..0.index/log, 1000-2000在第二个文件中, 命名为 0..2000.index/log. 文件值最大为long值的大小, 即64位二进制, 19位字符串大小, 前缀0填充.
+3. 分段是为了方便查找offset.
+
+按照功能, 消息队列分为: 生产者, 消费者, 消息中间件节点, zookeeper集群(保证一致性)
+
+kafka 通过 zookeeper 实现集群管理.
+
+分区以文件夹形式存储数据, 分区有索引加快检索.
+
+==== offset
+https://www.jianshu.com/p/449074d97daf
+
+.kafka中有两种offset
+1. Current Offset,本地offset. 消费者端保存的offset.
+2. Committed Offset, 服务端offset. Broker端保存的offset, 表示Consumer已经确认消费过的消息的序号.
+
+如果使用 Current Offset, 当消费者 reblance或挂掉重启后, offset位置将丢失.
+如果使用 Committed Offset, reblance或消费者重启不影响offset记录, 因为是记录在服务端的.
+
+.消费者组
+1. 在消费者组中, Group Coordinator 负责 Consumer Group的管理, 各Consumer的offset管理, Consumer元数据(id等) 等.
+2. 在消费者组中, 一个partition只能固定的交给一个消费者组中的一个消费者消费, 因此kafka以 `groupid-topic-partition -> offset` 的方式保存offset.
+3. kafka将offset存在topic `__consumers_offsets` 中, 读取时通过 Offsets cache 查询 offset. 更新offset时首先发消息到topic中, 然后更新cache. 
+
+auto.offset.reset 配置, 表示如果Kafka中没有存储对应的offset信息的话, 消费者从何处开始消费消息(可指定 earliest(最早)/latest(最新)/none(直接抛异常))
+
+==== 顺序消费
+kafka保证单Partition内消费是有序的, 多Partition消费不一定是有序的(如果要保证多partition有序, 则p1阻塞后, p2也会阻塞(要有序), 会影响kafka的吞吐性).
+
+.kafka 消息分区策略
+1. 发送函数签名 kafka.send(topic, partition, key).
+2. 如果指定partition, 则发送到指定patition.
+3. 如果key为null, 则根据topic名获取上次计算分区时使用的一个整数并加一取模.
+4. 如果key不为null, 则根据key hash值选择分区.
+
+.当要求消费顺序时.
+1. 只创建一个Partition. 但此时kafka高吞吐量的优势无法很好的体现.
+2. 当多个Partition时, 同一组业务数据设置相同的key, kafka会将相同key的数据放入一个partition. 如用户的一次购买过程.
+3. 借助订单状态, 将消息与数据对比, 状态正确则处理, 不正确则扔回延迟队列(适合基本有序的数据, 无序程度太高不合适)
+
+pravega 大数据流式存储
+pulsar 大数据 流批统一 消息队列, bookeeper 存储海量数据且高效(分层)
+
+=== epoll
+https://www.cnblogs.com/aspirant/p/9166944.html
+
+epoll是Linux内核的可扩展I/O事件通知机制, epoll让需要大量操作文件描述符的程序得以发挥更优异的性能.
+
+典型使用场景是 redis/nginx, 这些场景下通常有海量客户端与服务器保持连接, 但是每一时刻通常只有几百几千个活跃连接, 很需要使用I/O复用提升效率.
+
+.I/O 事件通知机制有如下几种实现
+1. 忙查询. 当阻塞时, 线程隔一段事件扫描一次所有I/O事件.
+2. select 无差别查询. 当I/O事件发生, 轮询所有监听的事件.
+3. epoll. 当I/O事件发生时, 同时知道那些事件发生了, 只轮询发生I/O的事件.
+
+epoll解决I/O多路复用的问题. I/O多路复用就通过一种机制, 可以监视多个描述符, 一旦某个描述符就绪(一般是读就绪或者写就绪), 能够通知程序进行相应的读写操作.
+
+Linux 原来使用select处理I/O事件通知, 当事件发生时, select轮询所有监听的I/O事件, 复杂度O(N).
+epoll 只监听其中发生事件的 I/O通知, 复杂度为 O(K) 或 O(1)
+
+1. epoll 在epoll_ctl函数(create)中, 创建时就会把所有的fd拷贝进内核, 而select是在每次调用时, 都会发生将fd集合由用户态拷贝到内核态.
+2. epoll 为每个fd指定一个回调函数, 通过回调确定具体的fd. select/poll 通过监听文件描述符实现, 只知道有事件发生.
+3. select 由于单个进程能够监听的文件描述符有最大限制(系统可调), 且select使用轮询, 所以监听句柄有上限. 而epoll则无此限制.
+
 === 网络
 .OSI七层模型
 1. 应用层. 应用级. 如 http/ftp/pop3(邮件), 针对不同软件的不同协议.
