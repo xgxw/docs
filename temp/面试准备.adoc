@@ -199,8 +199,10 @@ Mysql一般使用 explain/desc 查看sql执行计划, 检查sql问题.
 . 分库: 不同业务划分不同数据库, 减少数据库压力. 同业务根据情况决定.
 
 .引擎
-. InnoDB Mysql默认引擎, 支持事务, 优先考虑. 适合查询/插入/更新都很多的情况. InnoDB支持行级锁, MyISAM不支持.
-. MyISAM 不支持事务, 无主键, 适合查询很多的情况.
+1. 存储方式不同. innode聚集索引, 即主键索引和数据存在一起, 叶节点同时包含数据. myisam 表结构/索引/数据分三个文件存储, 索引叶节点直接指向地址.
+  .. 在不同系统, 文件大小是有限制的.
+2. innode支持索引, myisam不支持.
+3. myisam 最小粒度锁是表锁, innode最小粒度是行锁
 
 .分布式Mysql
 1. 结构: SqlExecer 执行节点, NDB数据存储节点, NDB_Mangerd NDB管理节点.
@@ -269,6 +271,10 @@ Mysql非聚集索引使用B+树实现. 因为B+树可以加快索引查询效率
   .. mysql会向右匹配到范围查询(>,<等)时停止匹配, 所以将范围查询放在条件的最后边.
   .. 如果有条件 created_at>xx, created_at有索引, 但是实际不会用到. 如果想要用到, 将 created_at 放到order中即可.
 2. 索引列不要参与计算. 如不要写 from_unixtime(time)='...', 而是 time=unix_timestamp('...')
+
+.范围查询失效详解
+1. 参考 link:https://dev.mysql.com/doc/refman/8.0/en/range-optimization.html[range-optimization]
+2. 原文 `If the operator is >, <, >=, <=, !=, <>, BETWEEN, or LIKE, the optimizer uses it but considers no more key parts`, 即当遇到范围查询, 后续条件将不参与索引.
 
 ==== 其他
 
@@ -739,3 +745,5 @@ WARNING: SETNX/SETEX/PSETEX 后续版本可能被剔除, 统一使用SET实现, 
 Go使用过程中不爽的地方::
   1. 没有多态. 同一函数参数不同时写起来很不优雅.
   2. 没有注解. AOP(面向切面)编程写起来不爽. 如事务传递的实现.
+  3. error 处理. 无法更好的获取code. 替代方案可以参考 grpc/error.
+
