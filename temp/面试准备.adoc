@@ -276,6 +276,18 @@ Mysql非聚集索引使用B+树实现. 因为B+树可以加快索引查询效率
 1. 参考 link:https://dev.mysql.com/doc/refman/8.0/en/range-optimization.html[range-optimization]
 2. 原文 `If the operator is >, <, >=, <=, !=, <>, BETWEEN, or LIKE, the optimizer uses it but considers no more key parts`, 即当遇到范围查询, 后续条件将不参与索引.
 
+==== MVCC
+MVCC, Multiversion Concurrency Control, 多版本并发控制. 主要用于处理读写冲突, 提升数据库在高并发下的处理能力.
+
+MVCC 在 读已提交/可重复读 隔离级别下生效, 通过版本号控制数据正确性. 未提交读不产生冲突, 串行化没有并发.
+
+.MVCC实现
+1. MVCC给每一行记录添加了 2/3 个字段
+  .. DATA_TRX_ID: 最近更新这条行记录的事务ID
+  .. DATA_ROLL_PTR: 指向该行回滚段的指针
+  .. DB_ROW_ID: 当表没有主键时, Innodb 生成的隐藏主键.
+2. MVCC 通过将同一份数据临时保存多个版本的方式实现并发控制. 其实类似与分布式系统通过版本号确定一致性.
+
 ==== 其他
 
 ACID 原子性, 一致性, 隔离性, 持久性
