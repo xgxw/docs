@@ -740,6 +740,10 @@ WARNING: SETNX/SETEX/PSETEX 后续版本可能被剔除, 统一使用SET实现, 
 1. redis zset. 通过设置score实现.
 2. rabbitmq ttl(存活时间)+dxl(死信队列)实现.
 3. 类似netty的时间轮调度算法. 设置一组时间key, 然后将队列挂在key的队列上, 然后定时调起列表上的任务. key也可以是环形的时间轮, 将触发事件hash后挂载到轮上.
+4. go timer 延时实现. 最小堆方式.
+
+https://www.cyhone.com/articles/analysis-of-golang-timer/
+
 
 === 一致性hash
 一致性hash解决分布式节点中数据/访问负载均衡的问题. 一致性hash解决两个问题, 1.如何尽量保证访问均匀的分散在各个节点. 2.如何尽量保证增删节点时对每个节点上缓存的原先数据影响最小.
