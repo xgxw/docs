@@ -39,7 +39,7 @@ image:./assets/gmp-process.jpg[调度过程]
 1. 当G阻塞时(如产生了系统调用), 解绑PM, 将剩余的G和P转移到其他M上执行.当阻塞M执行完毕时, 会尝试获取P, 如果没有获取到, 则G会放到全局队列中.
 2. 当某个P/M上所有G执行完毕, 全局队列又没有空闲G时, 会从其他队列中偷取G. 一般是一半.
 
-抢占式调用P
+抢占式调用P 参考 https://golang.design/under-the-hood/zh-cn/part2runtime/ch06sched/preemption/, 可以保证 p 不会饿死, 或某个 p 不会长期占用资源
 1. runtime.main 会创建一个额外线程运行 sysmon 函数.
 2. sysmon函数会无限循环(休眠时间由 20us->10ms)
 
