@@ -1,0 +1,234 @@
+= 一次关于函数变量与单例模式的探索
+
+假设我们有一个 config 类, 用于加载和读取配置. 一般而言, 在一个进程中, 我们只需要初始化一次 config. 借助单例模式, 我们很容易写出如下代码
+
+[source,go]
+----
+var config *Config
+var lock sync.Mutex
+
+// 双重锁检查. go 的编译器不存在指令重排的问题. 参考: https://www.cnblogs.com/xz816111/p/8470048.html
+func GetConfig2() *Config {
+	if config == nil {
+		lock.Lock()
+		defer lock.Unlock()
+		if config == nil {
+			config = &Config{}
+		}
+	}
+	return config
+}
+----
+
+然而如上这种方法, 产生了不必要的性能损耗: 每次执行 GetConfig 都检查 `config == nil`
+
+这时想到, 能否借助 Go 函数类型或者反射等手段, 可以重写 GetConfig 函数, 从而减少这个消耗. 新代码如下
+
+[source,go]
+----
+var config *Config
+var once sync.Once
+var GetConfig func()*Config
+
+func init(){
+    GetConfig = createConfig
+}
+
+func createConfig() *Config {
+	once.Do(func() {
+		config = &Config{}
+		// 重写 GetConfig 函数
+		GetConfig = func() *Config {
+			return config
+		}
+	})
+	return config
+}
+----
+
+经过如此改进, 必然消灭了之前写法影响性能的两个点, 逻辑分析和并发测试的结果都可以新写法的准确性没有问题.
+
+[source,go]
+----
+func BenchmarkGetConfig(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		GetConfig()
+	}
+}
+func BenchmarkGetConfig2(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		GetConfig2()
+	}
+}
+
+// 性能测试, 调换测试顺序后也一样
+BenchmarkGetConfig-12    	716348870	         1.54 ns/op
+BenchmarkGetConfig2-12    	555456693	         2.18 ns/op
+----
+
+== 函数变量 VS 原生函数
+可以从两个方面对比, 一个是内存上的区别, 一个是汇编后代码上的区别.
+
+注: 由于这一段知识需要补充的太多, 所以如下的描述可能存在有遗漏或者错误的情况. 后续有时间深入掌握后再回来补充.
+
+=== 内存
+我们知道, 操作系统通过段页思想管理存储系统, 而操作系统提供给进程的是虚拟内存. 关于存储底层, 我们不需要了解太多, 只需要知道进程面向的是虚拟内存即可, 程序的内存地址也是虚拟地址.
+
+在程序运行时, Linux 为每个进程维护了一个单独的虚拟地址空间, 其结构大致如下
+
+// 图
+
+以上文中 Config 为例, 原生函数是放在 `.text` 段, 全局变量是放在 `.bss/.data` 段的.
+
+从内存上看, 差别不大.
+
+.参考
+. link:https://hansimov.gitbook.io/csapp/part2/ch09-virtual-memory/9.9-dynamic-memory-allocation[深入理解计算机系统 第九章 虚拟内存]
+    .. 备注: 实体书已经第三版了, 这个地址的是较老版本的.
+. link:https://ivanzz1001.github.io/records/post/cplusplus/2018/11/12/cpluscplus-segment[Linux 段管理以及各段区别]
+
+=== 汇编
+go 源码如下
+
+[source,go]
+----
+// GetConfig/GetConfig2 参考上文
+func main(){
+    run()
+}
+func run(){
+	GetConfig()
+	GetConfig()
+	GetConfig2()
+}
+----
+
+使用命令 `go tool compile -N -l -S main.go` 生成汇编代码, 接下来我们着重看两部分汇编代码:
+
+1. 各函数/变量汇编后的代码, run() 入口调用命令
+2. GetConfig 和 GetConfig2 汇编后的区别.
+
+[source,asm]
+----
+"".GetConfig2 STEXT size=249 args=0x8 locals=0x68
+// ... 省略
+
+"".run STEXT size=75 args=0x0 locals=0x10
+    // ... 省略
+	0x001d 00029 (main.go:44)	MOVQ	"".GetConfig(SB), DX
+	0x0024 00036 (main.go:44)	MOVQ	(DX), AX
+	0x0027 00039 (main.go:44)	PCDATA	$1, $0
+	0x0027 00039 (main.go:44)	CALL	AX
+	0x0029 00041 (main.go:45)	MOVQ	"".GetConfig(SB), DX
+	0x0030 00048 (main.go:45)	MOVQ	(DX), AX
+	0x0033 00051 (main.go:45)	CALL	AX
+	0x0035 00053 (main.go:46)	CALL	"".GetConfig2(SB)
+// ... 省略
+
+"".config SBSS size=8
+"".once SNOPTRBSS size=12
+"".GetConfig SBSS size=8
+"".lock SNOPTRBSS size=8
+"".createConfig·f SRODATA dupok size=8
+	0x0000 00 00 00 00 00 00 00 00                          ........
+	rel 0+8 t=1 "".createConfig+0
+"".createConfig.func1·f SRODATA dupok size=8
+	0x0000 00 00 00 00 00 00 00 00                          ........
+	rel 0+8 t=1 "".createConfig.func1+0
+"".createConfig.func1.1·f SRODATA dupok size=8
+	0x0000 00 00 00 00 00 00 00 00                          ........
+	rel 0+8 t=1 "".createConfig.func1.1+0
+----
+
+.可以得出如下结论
+1. 函数和变量确实分属不同段
+2. 变量函数(GetConfig)调用顺序是: 取值=>转为函数=>call, 而函数(GetConfig2)则是直接 call
+
+''''
+
+[source,asm]
+----
+"".GetConfig2 STEXT size=249 args=0x8 locals=0x68
+	0x0000 00000 (main.go:30)	TEXT	"".GetConfig2(SB), ABIInternal, $104-8
+	0x0000 00000 (main.go:30)	MOVQ	(TLS), CX
+	0x0009 00009 (main.go:30)	CMPQ	SP, 16(CX)
+	0x000d 00013 (main.go:30)	PCDATA	$0, $-2
+	0x000d 00013 (main.go:30)	JLS	239
+	0x0013 00019 (main.go:30)	PCDATA	$0, $-1
+	0x0013 00019 (main.go:30)	SUBQ	$104, SP
+	0x0017 00023 (main.go:30)	MOVQ	BP, 96(SP)
+	0x001c 00028 (main.go:30)	LEAQ	96(SP), BP
+	0x0021 00033 (main.go:30)	FUNCDATA	$0, gclocals·9fb7f0986f647f17cb53dda1484e0f7a(SB)
+	0x0021 00033 (main.go:30)	FUNCDATA	$1, gclocals·263043c8f03e3241528dfae4e2812ef4(SB)
+	0x0021 00033 (main.go:30)	MOVQ	$0, "".~r0+112(SP)
+	0x002a 00042 (main.go:31)	CMPQ	"".config(SB), $0
+    // 第一次判断 config==nil
+	0x0032 00050 (main.go:31)	JNE	54 
+	0x0034 00052 (main.go:31)	JMP	84
+	0x0036 00054 (main.go:31)	JMP	56
+    // 56 表示 return config 的逻辑
+	0x0038 00056 (main.go:38)	MOVQ	"".config(SB), AX
+	0x003f 00063 (main.go:38)	MOVQ	AX, "".~r0+112(SP)
+	0x0044 00068 (main.go:38)	PCDATA	$1, $1
+	0x0044 00068 (main.go:38)	XCHGL	AX, AX
+	0x0045 00069 (main.go:38)	CALL	runtime.deferreturn(SB)
+	0x004a 00074 (main.go:38)	MOVQ	96(SP), BP
+	0x004f 00079 (main.go:38)	ADDQ	$104, SP
+	0x0053 00083 (main.go:38)	RET
+// ... 省略
+
+
+// GetConfig = func()*Config{return config} 部分的代码
+"".createConfig.func1.1 STEXT nosplit size=22 args=0x8 locals=0x0
+	0x0000 00000 (main.go:21)	TEXT	"".createConfig.func1.1(SB), NOSPLIT|ABIInternal, $0-8
+	0x0000 00000 (main.go:21)	FUNCDATA	$0, gclocals·2a5305abe05176240e61b8620e19a815(SB)
+	0x0000 00000 (main.go:21)	FUNCDATA	$1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB)
+	0x0000 00000 (main.go:21)	MOVQ	$0, "".~r0+8(SP)
+	0x0009 00009 (main.go:22)	MOVQ	"".config(SB), AX
+	0x0010 00016 (main.go:22)	MOVQ	AX, "".~r0+8(SP)
+	0x0015 00021 (main.go:22)	RET
+	0x0000 48 c7 44 24 08 00 00 00 00 48 8b 05 00 00 00 00  H.D$.....H......
+	0x0010 48 89 44 24 08 c3                                H.D$..
+	rel 12+4 t=16 "".config+0
+----
+
+可以看到, 在函数内, 改良后的指令数远少于原先的函数.
+
+One more thing, 我们都知道, 底层执行 if 时, 会优先假设为 true 去执行, 如果发现 false 在重新执行(具体逻辑未去了解). 看汇编代码也可以发现这个逻辑, 为 true 的指令在前, 但是将 GetConfig2 第一个判断改为 `if config!=nil{}` 时, 执行速度反而慢了巨多. 有兴趣的同学可以看下汇编代码研究下
+
+
+[source,go]
+----
+BenchmarkGetConfig1-12    	785236588	         1.50 ns/op
+BenchmarkGetConfig2-12    	640304968	         1.90 ns/op
+// BenchmarkGetConfig3 为修改了 if config!=nil{}
+BenchmarkGetConfig3-12    	89171953	        13.1 ns/op
+----
+
+''''
+
+.涉及到的一些知识
+. JNE: 条件转移指令.
+. RET: 指令加载返回地址, 跳到返回地址.
+. ABIInternal: 实验版本的 calling convention. 具体参考 link:https://github.com/golang/proposal/blob/master/design/27539-internal-abi.md[internal abi]
+. `//go:noinline`: 禁用内联. 内联是在编译期间发生的, 将函数调用调用处替换为被调用函数主体的一种编译器优化手段. 参考 link:https://en.wikipedia.org/wiki/Inline_expansion[Inline expansion wiki]
+
+.参考
+. link:https://golang.org/doc/asm[golang asm]
+. link:https://www.cnblogs.com/goldsunshine/p/14560301.html[从汇编语言的寄存器来看函数参数传递]
+. link:https://rj45mp.github.io/ret指令与call指令的深入理解[ret/call 指令的区别]
+
+== 结论
+综上, 可知函数变量的效率会略高一些.
+
+那么, 问题来了, 使用函数变量时, 如何避免其赋值的流程, 直接 call 呢?
+
+(我已死, 不想继续磕下去了....)
+
+== End
+在这个过程中, 发现了挺多好玩的, 比如 link:https://github.com/golang/proposal/blob/master/design/27539-internal-abi.md[golang 提案], link:https://golang.org/doc/asm[golang asm], 也有刚开始的看的头疼到后面的渐入佳境, 也挺有意思的.
+
+凭借着我半吊子和垃圾的对汇编和计算机底层的理解, 也算是大概看了下其之后的逻辑, 分析了性能.
+
+感谢互联网, 感谢官方文档, 感谢大部头, 不然早已溺死在知识的海洋中.
+
